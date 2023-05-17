@@ -66,7 +66,7 @@ end
 --
 -- If `indirect_jump_targets` is `nil`, `jump_targets` is assumed already ordered with all jump target with the same
 -- score (0)
-function M.create_hints(jump_targets, indirect_jump_targets, opts)
+function M.create_hints(jump_targets, indirect_jump_targets, opts, removed_idx)
   local hints = {}
   local perms = perm.permutations(opts.keys, #jump_targets, opts)
 
@@ -79,13 +79,21 @@ function M.create_hints(jump_targets, indirect_jump_targets, opts)
     end
   end
 
+  local rem_i
   for i, indirect in pairs(indirect_jump_targets) do
-    hints[indirect.index] = {
-      label = tbl_to_str(perms[i]),
-      jump_target = jump_targets[indirect.index]
-    }
+	if indirect.index ~= removed_idx then
+	  hints[indirect.index] = {
+		label = tbl_to_str(perms[i]),
+		jump_target = jump_targets[indirect.index]
+	}
+	else
+	  rem_i = i
+	end
   end
-
+  if removed_idx then
+		table.remove(jump_targets, removed_idx)
+  	table.remove(indirect_jump_targets, rem_i)
+  end
   return hints
 end
 

@@ -91,8 +91,14 @@ local function set_unmatched_lines(buf_handle, hl_ns, top_line, bottom_line, cur
   local start_col = 0
   local end_col = nil
 
-  if #vim.api.nvim_get_current_line() == 0 then
-    cursor_pos[2] = cursor_pos[2] - 1
+  -- NOTE: This had to be changed because we now autojump to first label
+  -- so at this point, nvim_get_current_line() does not return the line
+  -- we want
+
+  if vim.fn.col {cursor_pos[1], '$'} == 1 then
+  --  or this \/\/  idk which one is best
+  -- if #vim.api.nvim_buf_get_lines(buf_handle, cursor_pos[1] - 1, cursor_pos[1], true)[1] == 0 then
+		cursor_pos[2] = cursor_pos[2] - 1
   end
 
   if direction == hint.HintDirection.AFTER_CURSOR then
@@ -125,7 +131,6 @@ local function set_unmatched_lines(buf_handle, hl_ns, top_line, bottom_line, cur
 
     if end_col > current_width then
       end_col = current_width - 1
-      -- end_col = current_width
     end
 
     extmark_options.end_col = end_col
@@ -233,9 +238,7 @@ function M.get_input_pattern(prompt, maxchar, opts)
         end
       end
     end
-    -- vim.api.nvim_echo({}, false, {})
     vim.cmd('redraw')
-    -- vim.api.nvim_echo({{prompt, 'Question'}, {pat}}, false, {})
 
     local ok, key = pcall(vim.fn.getchar)
     if not ok then -- Interrupted by <C-c>
@@ -325,25 +328,36 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
   end
 
   if not M.initialized then
-    vim.notify('Hop is not initialized; please call the setup function', 4)
+    vim.notify('Hop is not initialized; please call the setup function', vim.log.levels.ERROR)
     return
   end
-
   -- create hint state
   local hs = create_hint_state(opts)
+	local curr_win 	 = vim.api.nvim_get_current_win()
+  local cursor_pos = vim.api.nvim_win_get_cursor(curr_win)
 
   -- create jump targets
   local generated = jump_target_gtr(opts)
   local jump_target_count = #generated.jump_targets
 
+  local jumped_to_idx = nil
   local target_idx = nil
   if jump_target_count == 0 then
     target_idx = 0
   elseif vim.v.count > 0 then
     target_idx = vim.v.count
+  elseif jump_target_count > 1 then
+		if opts.direction == hint.HintDirection.BEFORE_CURSOR then
+			jumped_to_idx = jump_target_count
+		else
+			jumped_to_idx = 1
+		end
+		callback(generated.jump_targets[jumped_to_idx])
   elseif jump_target_count == 1 and opts.jump_on_sole_occurrence then
     target_idx = 1
   end
+
+	-- print(vim.inspect(opts.direction))
 
   if target_idx ~= nil then
     local jt = generated.jump_targets[target_idx]
@@ -359,7 +373,12 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
   end
 
   -- we have at least two targets, so generate hints to display
-  hs.hints = hint.create_hints(generated.jump_targets, generated.indirect_jump_targets, opts)
+  hs.hints = hint.create_hints(
+		generated.jump_targets,
+		generated.indirect_jump_targets,
+		opts,
+		jumped_to_idx  -- create_hints() checks if this is nil
+	)
 
   -- dim everything out, add the virtual cursor and hide diagnostics
   apply_dimming(hs, opts)
@@ -367,11 +386,13 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
   hint.set_hint_extmarks(hs.hl_ns, hs.hints, opts)
   vim.cmd('redraw')
 
+  local initial_pos = jumped_to_idx and { curr_win, cursor_pos } or nil
+
   local h = nil
   while h == nil do
     local ok, key = pcall(vim.fn.getchar)
     if not ok then
-      M.quit(hs)
+      M.quit(hs, initial_pos)
       break
     end
     local not_special_key = true
@@ -387,16 +408,32 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
       not_special_key = false
     end
 
-    if not_special_key and opts.keys:find(key, 1, true) then
-      -- If this is a key used in Hop (via opts.keys), deal with it in Hop
+		local do_refine_hints = false
+
+		if not_special_key then
+			for _, _hint in pairs(hs.hints) do
+				if string.sub(_hint.label,1,1) == key then
+					do_refine_hints = true
+					break
+				end
+			end
+		end
+
+    -- if not_special_key and opts.keys:find(key, 1, true) then
+    -- If this is a key used in Hop (via opts.keys), deal with it in Hop
+    if do_refine_hints then
       h = M.refine_hints(key, hs, callback, opts)
       vim.cmd('redraw')
     else
+			local is_quit_key = key == vim.api.nvim_replace_termcodes(
+					opts.quit_key, true, false, true
+			)
       -- If it's not, quit Hop
-      M.quit(hs)
+      -- M.quit(hs, is_quit_key and jumped_to_first and { curr_win, cursor_pos })
+      M.quit(hs, is_quit_key and initial_pos)
       -- If the key captured via getchar() is not the quit_key, pass it through
       -- to nvim to be handled normally (including mappings)
-      if key ~= vim.api.nvim_replace_termcodes(opts.quit_key, true, false, true) then
+      if not is_quit_key then
         vim.api.nvim_feedkeys(key, '', true)
       end
       break
@@ -435,13 +472,23 @@ function M.refine_hints(key, hint_state, callback, opts)
 end
 
 -- Quit Hop and delete its resources.
-function M.quit(hint_state)
+function M.quit(hint_state, original_pos)
   clear_namespace(hint_state.buf_list, hint_state.hl_ns)
   clear_namespace(hint_state.buf_list, hint_state.dim_ns)
 
+	local curr_win = vim.api.nvim_get_current_win()
+
+	if original_pos then
+		if curr_win ~= original_pos[1] then
+			curr_win = original_pos[1]
+			vim.api.nvim_set_current_win(curr_win)
+		end
+		vim.api.nvim_win_set_cursor(curr_win, original_pos[2])
+	end
+
   -- Restore users cursorline setting
   if hint_state.cursorline == true then
-    vim.api.nvim_win_set_option(vim.api.nvim_get_current_win(), 'cursorline', true)
+    vim.api.nvim_win_set_option(curr_win, 'cursorline', true)
   end
 
   for _, buf in ipairs(hint_state.buf_list) do
@@ -452,6 +499,10 @@ function M.quit(hint_state)
       for ns in pairs(hint_state.diag_ns) do vim.diagnostic.show(ns, buf) end
     end
   end
+
+	-- if cursor_pos then
+	-- 	vim.api.nvim_win_set_cursor(curr_win, 
+
 end
 
 function M.hint_words(opts)
