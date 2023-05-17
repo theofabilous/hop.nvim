@@ -346,18 +346,22 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
     target_idx = 0
   elseif vim.v.count > 0 then
     target_idx = vim.v.count
-  elseif jump_target_count > 1 then
-		if opts.direction == hint.HintDirection.BEFORE_CURSOR then
-			jumped_to_idx = jump_target_count
-		else
-			jumped_to_idx = 1
-		end
+  elseif jump_target_count > 1 or
+	     not opts.jump_on_sole_occurrence and jump_target_count == 1
+  then
+	    -- NOTE: Changed to just taking the first *indirect* target
+		-- because its the indirect targets that are sorted
+
+		-- if opts.direction == hint.HintDirection.BEFORE_CURSOR then
+		-- 	jumped_to_idx = jump_target_count
+		-- else
+		-- 	jumped_to_idx = 1
+		-- end
+		jumped_to_idx = generated.indirect_jump_targets[1].index
 		callback(generated.jump_targets[jumped_to_idx])
   elseif jump_target_count == 1 and opts.jump_on_sole_occurrence then
     target_idx = 1
   end
-
-	-- print(vim.inspect(opts.direction))
 
   if target_idx ~= nil then
     local jt = generated.jump_targets[target_idx]
@@ -467,6 +471,7 @@ function M.refine_hints(key, hint_state, callback, opts)
     vim.cmd("normal! m'")
 
     callback(h.jump_target)
+	vim.api.nvim_exec_autocmds("User", {pattern = "HopFinish", modeline = false})
     return h
   end
 end
@@ -499,10 +504,9 @@ function M.quit(hint_state, original_pos)
       for ns in pairs(hint_state.diag_ns) do vim.diagnostic.show(ns, buf) end
     end
   end
-
-	-- if cursor_pos then
-	-- 	vim.api.nvim_win_set_cursor(curr_win, 
-
+  if original_pos then
+	  vim.api.nvim_exec_autocmds("User", {pattern = "HopCancel", modeline = false})
+  end
 end
 
 function M.hint_words(opts)
@@ -588,6 +592,31 @@ function M.hint_char2(opts)
   opts = override_opts(opts)
 
   local c = M.get_input_pattern('Hop 2 char: ', 2, opts)
+  if not c then
+    return
+  end
+
+  local generator
+  if opts.current_line_only then
+    generator = jump_target.jump_targets_for_current_line
+  else
+    generator = jump_target.jump_targets_by_scanning_lines
+  end
+
+  M.hint_with(
+    generator(jump_target.regex_by_case_searching(c, true, opts)),
+    opts
+  )
+end
+
+function M.hint_char_n(opts)
+  local jump_target = require'hop.jump_target'
+
+  local num_chars = opts.num_chars or 3
+  opts.num_chars = nil
+  opts = override_opts(opts)
+
+  local c = M.get_input_pattern('Hop 2 char: ', num_chars, opts)
   if not c then
     return
   end
