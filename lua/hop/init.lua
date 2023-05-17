@@ -91,6 +91,10 @@ local function set_unmatched_lines(buf_handle, hl_ns, top_line, bottom_line, cur
   local start_col = 0
   local end_col = nil
 
+  if #vim.api.nvim_get_current_line() == 0 then
+    cursor_pos[2] = cursor_pos[2] - 1
+  end
+
   if direction == hint.HintDirection.AFTER_CURSOR then
     start_col = cursor_pos[2]
   elseif direction == hint.HintDirection.BEFORE_CURSOR then
@@ -121,6 +125,7 @@ local function set_unmatched_lines(buf_handle, hl_ns, top_line, bottom_line, cur
 
     if end_col > current_width then
       end_col = current_width - 1
+      -- end_col = current_width
     end
 
     extmark_options.end_col = end_col
@@ -228,9 +233,9 @@ function M.get_input_pattern(prompt, maxchar, opts)
         end
       end
     end
-    vim.api.nvim_echo({}, false, {})
+    -- vim.api.nvim_echo({}, false, {})
     vim.cmd('redraw')
-    vim.api.nvim_echo({{prompt, 'Question'}, {pat}}, false, {})
+    -- vim.api.nvim_echo({{prompt, 'Question'}, {pat}}, false, {})
 
     local ok, key = pcall(vim.fn.getchar)
     if not ok then -- Interrupted by <C-c>
@@ -266,7 +271,7 @@ function M.get_input_pattern(prompt, maxchar, opts)
     -- quit only when got nothin for pattern to avoid blink of highlight
     if not pat then M.quit(hs) end
   end
-  vim.api.nvim_echo({}, false, {})
+  -- vim.api.nvim_echo({}, false, {})
   vim.cmd('redraw')
   return pat
 end
@@ -508,7 +513,7 @@ function M.hint_char1(opts)
 
   opts = override_opts(opts)
 
-  local c = M.get_input_pattern('Hop 1 char: ', 1)
+  local c = M.get_input_pattern('Hop 1 char: ', 1, opts)
   if not c then
     return
   end
@@ -531,7 +536,7 @@ function M.hint_char2(opts)
 
   opts = override_opts(opts)
 
-  local c = M.get_input_pattern('Hop 2 char: ', 2)
+  local c = M.get_input_pattern('Hop 2 char: ', 2, opts)
   if not c then
     return
   end
