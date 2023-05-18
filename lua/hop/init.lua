@@ -411,7 +411,6 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
     elseif key:byte() == 128 then
       not_special_key = false
     end
-
 		local do_refine_hints = false
 
 		if not_special_key then
@@ -432,12 +431,16 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
 			local is_quit_key = key == vim.api.nvim_replace_termcodes(
 					opts.quit_key, true, false, true
 			)
+			local is_confirm_key = key == vim.api.nvim_replace_termcodes(
+					opts.confirm_key, true, false, true
+			)
+			-- print(vim.inspect(opts))
       -- If it's not, quit Hop
       -- M.quit(hs, is_quit_key and jumped_to_first and { curr_win, cursor_pos })
       M.quit(hs, is_quit_key and initial_pos)
       -- If the key captured via getchar() is not the quit_key, pass it through
       -- to nvim to be handled normally (including mappings)
-      if not is_quit_key then
+      if not (is_quit_key or is_confirm_key) then
         vim.api.nvim_feedkeys(key, '', true)
       end
       break
