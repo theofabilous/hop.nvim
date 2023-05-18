@@ -396,7 +396,7 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
   while h == nil do
     local ok, key = pcall(vim.fn.getchar)
     if not ok then
-      M.quit(hs, initial_pos)
+      M.quit(hs, { original_pos = initial_pos })
       break
     end
     local not_special_key = true
@@ -437,7 +437,10 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
 			-- print(vim.inspect(opts))
       -- If it's not, quit Hop
       -- M.quit(hs, is_quit_key and jumped_to_first and { curr_win, cursor_pos })
-      M.quit(hs, is_quit_key and initial_pos)
+      M.quit(hs, {
+		original_pos = is_quit_key and initial_pos,
+		autocmd = is_quit_key and 'HopCancel' or 'HopFinish'
+	})
       -- If the key captured via getchar() is not the quit_key, pass it through
       -- to nvim to be handled normally (including mappings)
       if not (is_quit_key or is_confirm_key) then
@@ -480,18 +483,20 @@ function M.refine_hints(key, hint_state, callback, opts)
 end
 
 -- Quit Hop and delete its resources.
-function M.quit(hint_state, original_pos)
+function M.quit(hint_state, opts)
   clear_namespace(hint_state.buf_list, hint_state.hl_ns)
   clear_namespace(hint_state.buf_list, hint_state.dim_ns)
 
+  opts = opts or {}
+
 	local curr_win = vim.api.nvim_get_current_win()
 
-	if original_pos then
-		if curr_win ~= original_pos[1] then
-			curr_win = original_pos[1]
+	if opts.original_pos then
+		if curr_win ~= opts.original_pos[1] then
+			curr_win = opts.original_pos[1]
 			vim.api.nvim_set_current_win(curr_win)
 		end
-		vim.api.nvim_win_set_cursor(curr_win, original_pos[2])
+		vim.api.nvim_win_set_cursor(curr_win, opts.original_pos[2])
 	end
 
   -- Restore users cursorline setting
@@ -507,8 +512,8 @@ function M.quit(hint_state, original_pos)
       for ns in pairs(hint_state.diag_ns) do vim.diagnostic.show(ns, buf) end
     end
   end
-  if original_pos then
-	  vim.api.nvim_exec_autocmds("User", {pattern = "HopCancel", modeline = false})
+  if opts.autocmd then
+	  vim.api.nvim_exec_autocmds("User", {pattern = opts.autocmd, modeline = false})
   end
 end
 
