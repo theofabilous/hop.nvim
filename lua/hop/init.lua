@@ -349,15 +349,13 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
   elseif jump_target_count > 1 or
 	     not opts.jump_on_sole_occurrence and jump_target_count == 1
   then
-	    -- NOTE: Changed to just taking the first *indirect* target
-		-- because its the indirect targets that are sorted
-
-		-- if opts.direction == hint.HintDirection.BEFORE_CURSOR then
-		-- 	jumped_to_idx = jump_target_count
-		-- else
-		-- 	jumped_to_idx = 1
-		-- end
-		jumped_to_idx = generated.indirect_jump_targets[1].index
+		if opts.direction == hint.HintDirection.BEFORE_CURSOR then
+			jumped_to_idx = jump_target_count
+		elseif opts.direction == hint.HintDirection.AFTER_CURSOR then
+			jumped_to_idx = 1
+		else
+			jumped_to_idx = generated.indirect_jump_targets[1].index
+		end
 		callback(generated.jump_targets[jumped_to_idx])
   elseif jump_target_count == 1 and opts.jump_on_sole_occurrence then
     target_idx = 1
