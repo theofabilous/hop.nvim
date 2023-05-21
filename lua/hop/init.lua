@@ -164,7 +164,7 @@ end
 --   tab character or past the end of the line
 -- - the current line is empty
 -- - there are multibyte characters on the line
-local function add_virt_cur(ns)
+local function add_virt_cur(ns, toggle_cursorline)
   local prio = require'hop.priority'
 
   local cur_info = vim.fn.getcurpos()
@@ -176,7 +176,7 @@ local function add_virt_cur(ns)
 
   -- toggle cursorline off if currently set
   local cursorline_info = vim.api.nvim_win_get_option(vim.api.nvim_get_current_win(), 'cursorline')
-  if cursorline_info == true then
+  if toggle_cursorline == true and cursorline_info == true then
     vim.api.nvim_win_set_option(vim.api.nvim_get_current_win(), 'cursorline', false)
   end
 
@@ -214,7 +214,7 @@ function M.get_input_pattern(prompt, maxchar, opts)
     hs = create_hint_state(opts)
     hs.preview_ns = vim.api.nvim_create_namespace('hop_preview')
     apply_dimming(hs, opts)
-    add_virt_cur(hs.hl_ns)
+    add_virt_cur(hs.hl_ns, false)
   end
 
   local K_Esc = vim.api.nvim_replace_termcodes('<Esc>', true, false, true)
