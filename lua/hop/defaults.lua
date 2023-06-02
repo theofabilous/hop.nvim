@@ -13,5 +13,7 @@ M.uppercase_labels = false
 M.multi_windows = false
 M.hint_position = require'hop.hint'.HintPosition.BEGIN
 M.hint_offset = 0
+M.on_last_key = true
+M.autocmd_after_on_last_key = false
 
 return M

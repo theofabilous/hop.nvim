@@ -394,7 +394,7 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
   while h == nil do
     local ok, key = pcall(vim.fn.getchar)
     if not ok then
-      M.quit(hs, { original_pos = initial_pos })
+      M.quit(hs, { original_pos = initial_pos, autocmd = 'HopCancel' })
       break
     end
     local not_special_key = true
@@ -435,15 +435,27 @@ function M.hint_with_callback(jump_target_gtr, opts, callback)
 			-- print(vim.inspect(opts))
       -- If it's not, quit Hop
       -- M.quit(hs, is_quit_key and jumped_to_first and { curr_win, cursor_pos })
+	  local autocmd=is_quit_key and 'HopCancel' or 'HopFinish'
       M.quit(hs, {
 		original_pos = is_quit_key and initial_pos,
-		autocmd = is_quit_key and 'HopCancel' or 'HopFinish'
+		autocmd = (not opts.autocmd_after_on_last_key) and autocmd or nil
 	})
       -- If the key captured via getchar() is not the quit_key, pass it through
       -- to nvim to be handled normally (including mappings)
       if not (is_quit_key or is_confirm_key) then
-        vim.api.nvim_feedkeys(key, '', true)
+		if opts.on_last_key == true then
+			-- vim.api.nvim_feedkeys(key, '', true)
+			vim.api.nvim_feedkeys(key, 't', false)
+		elseif type(opts.on_last_key) == "function" then
+			opts.on_last_key(key)
+		end
       end
+	  if opts.autocmd_after_on_last_key then
+	  	vim.api.nvim_exec_autocmds(
+			"User",
+			{pattern = autocmd, modeline = false}
+		)
+	  end
       break
     end
   end
